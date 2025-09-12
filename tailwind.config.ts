@@ -47,15 +47,31 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        sidebar: {
-          DEFAULT: "hsl(var(--sidebar-background))",
-          foreground: "hsl(var(--sidebar-foreground))",
-          primary: "hsl(var(--sidebar-primary))",
-          "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
-          accent: "hsl(var(--sidebar-accent))",
-          "accent-foreground": "hsl(var(--sidebar-accent-foreground))",
-          border: "hsl(var(--sidebar-border))",
-          ring: "hsl(var(--sidebar-ring))",
+        // Railway Control System Colors
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
+        // Train Type Colors
+        express: "hsl(var(--express-train))",
+        local: "hsl(var(--local-train))",
+        freight: "hsl(var(--freight-train))",
+        // Control Panel
+        panel: {
+          DEFAULT: "hsl(var(--panel-bg))",
+          border: "hsl(var(--panel-border))",
+        },
+        grid: "hsl(var(--grid-line))",
+        graph: "hsl(var(--graph-bg))",
+        conflict: "hsl(var(--conflict-zone))",
+        status: {
+          active: "hsl(var(--status-active))",
+          warning: "hsl(var(--status-warning))",
+          critical: "hsl(var(--status-critical))",
         },
       },
       borderRadius: {
