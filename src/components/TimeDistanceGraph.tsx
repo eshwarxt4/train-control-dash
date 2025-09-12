@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import { Train, Conflict } from '@/types/rail';
 import { stations } from '@/data/scenarios';
 import { Badge } from '@/components/ui/badge';
+import { Train as TrainIcon, Clock } from 'lucide-react';
 
 interface TimeDistanceGraphProps {
   trains: Train[];
@@ -155,36 +156,129 @@ export function TimeDistanceGraph({
       if (trajectoryPoints.length > 1) {
         const line = d3.line<[number, number]>()
           .x(d => xScale(d[0]))
-          .y(d => yScale(d[1]));
+          .y(d => yScale(d[1]))
+          .curve(d3.curveMonotoneX); // Smooth curve for more realistic train movement
 
-        // Train path
+        // Train path with gradient effect
+        const gradient = g.append("defs")
+          .append("linearGradient")
+          .attr("id", `gradient-${train.id}`)
+          .attr("gradientUnits", "userSpaceOnUse")
+          .attr("x1", xScale(trajectoryPoints[0][0]))
+          .attr("x2", xScale(trajectoryPoints[trajectoryPoints.length - 1][0]));
+
+        gradient.append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", trainColor)
+          .attr("stop-opacity", 0.3);
+
+        gradient.append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", trainColor)
+          .attr("stop-opacity", 1);
+
+        // Train path background (wider, lighter)
         g.append("path")
           .datum(trajectoryPoints)
           .attr("fill", "none")
           .attr("stroke", trainColor)
-          .attr("stroke-width", 3)
+          .attr("stroke-width", 6)
+          .attr("stroke-opacity", 0.2)
           .attr("d", line);
 
-        // Current position marker
+        // Train path main line
+        g.append("path")
+          .datum(trajectoryPoints)
+          .attr("fill", "none")
+          .attr("stroke", `url(#gradient-${train.id})`)
+          .attr("stroke-width", 3)
+          .attr("d", line)
+          .attr("stroke-dasharray", train.status === 'breakdown' ? "5,5" : "none");
+
+        // Current position marker with enhanced visual
         const currentPos = calculateTrainPosition(train, currentTime);
+        const isRunning = parseTime(currentTime) >= parseTime(train.depart);
         if (currentPos > 0 && currentPos <= 75) {
-          g.append("circle")
-            .attr("cx", currentTimeLine)
-            .attr("cy", yScale(currentPos))
-            .attr("r", 6)
+          // Outer glow for running trains
+          if (isRunning && train.status !== 'breakdown') {
+            g.append("circle")
+              .attr("cx", currentTimeLine)
+              .attr("cy", yScale(currentPos))
+              .attr("r", 12)
+              .attr("fill", trainColor)
+              .attr("opacity", 0.2)
+              .attr("class", "train-glow");
+          }
+
+          // Main train marker
+          const trainMarker = g.append("g")
+            .attr("class", "train-marker")
+            .attr("transform", `translate(${currentTimeLine}, ${yScale(currentPos)})`);
+
+          // Train body (rectangle for more realistic look)
+          trainMarker.append("rect")
+            .attr("x", -8)
+            .attr("y", -4)
+            .attr("width", 16)
+            .attr("height", 8)
             .attr("fill", trainColor)
             .attr("stroke", "white")
-            .attr("stroke-width", 2);
+            .attr("stroke-width", 2)
+            .attr("rx", 2);
 
-          // Train label
-          g.append("text")
-            .attr("x", currentTimeLine + 10)
-            .attr("y", yScale(currentPos))
+          // Train status indicator
+          if (train.status === 'breakdown') {
+            trainMarker.append("circle")
+              .attr("cx", 6)
+              .attr("cy", -6)
+              .attr("r", 3)
+              .attr("fill", "#ef4444")
+              .attr("stroke", "white")
+              .attr("stroke-width", 1);
+          } else if (train.delay > 0) {
+            trainMarker.append("circle")
+              .attr("cx", 6)
+              .attr("cy", -6)
+              .attr("r", 3)
+              .attr("fill", "#f59e0b")
+              .attr("stroke", "white")
+              .attr("stroke-width", 1);
+          }
+
+          // Train ID label with background
+          const labelGroup = g.append("g")
+            .attr("class", "train-label")
+            .attr("transform", `translate(${currentTimeLine + 12}, ${yScale(currentPos)})`);
+
+          // Label background
+          labelGroup.append("rect")
+            .attr("x", -2)
+            .attr("y", -8)
+            .attr("width", train.id.length * 6 + 4)
+            .attr("height", 16)
+            .attr("fill", "hsl(var(--background))")
+            .attr("stroke", trainColor)
+            .attr("stroke-width", 1)
+            .attr("rx", 2)
+            .attr("opacity", 0.9);
+
+          // Label text
+          labelGroup.append("text")
+            .attr("x", 0)
+            .attr("y", 0)
             .attr("dy", "0.35em")
             .attr("fill", "hsl(var(--foreground))")
             .attr("font-size", "11px")
             .attr("font-weight", "bold")
             .text(train.id);
+
+          // Speed indicator (small arrow for direction/movement)
+          if (isRunning && train.status !== 'breakdown') {
+            trainMarker.append("polygon")
+              .attr("points", "8,0 12,2 12,-2")
+              .attr("fill", "white")
+              .attr("opacity", 0.8);
+          }
         }
       }
     });
@@ -260,31 +354,111 @@ export function TimeDistanceGraph({
         )}
       </div>
 
-      {/* Train Status Cards */}
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        {trains.slice(0, 4).map(train => (
-          <div
-            key={train.id}
-            className="flex items-center space-x-2 p-2 bg-panel rounded border border-panel-border"
-          >
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: getTrainColor(train.type) }}
-            />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-1">
-                <span className="font-mono text-sm font-medium text-foreground">{train.id}</span>
-                <Badge variant="outline" className="text-xs">
-                  {train.type}
-                </Badge>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {train.status === 'breakdown' ? 'BREAKDOWN' : 
-                 parseTime(currentTime) < parseTime(train.depart) ? 'Scheduled' : 'Running'}
-              </div>
+      {/* Enhanced Train Status Display */}
+      <div className="mt-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h5 className="font-medium text-foreground">Active Trains</h5>
+          <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 rounded-full bg-success"></div>
+              <span>Running</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 rounded-full bg-warning"></div>
+              <span>Delayed</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 rounded-full bg-destructive"></div>
+              <span>Emergency</span>
             </div>
           </div>
-        ))}
+        </div>
+        
+        <div className="grid grid-cols-1 gap-2">
+          {trains.map(train => {
+            const isActive = parseTime(currentTime) >= parseTime(train.depart);
+            const position = calculateTrainPosition(train, currentTime);
+            
+            return (
+              <div
+                key={train.id}
+                className={`flex items-center space-x-3 p-3 bg-panel rounded-lg border transition-all ${
+                  train.status === 'breakdown' 
+                    ? 'border-destructive/50 bg-destructive/5' 
+                    : isActive 
+                      ? 'border-primary/30 bg-primary/5' 
+                      : 'border-panel-border'
+                }`}
+              >
+                {/* Train Icon */}
+                <div className={`w-10 h-6 rounded flex items-center justify-center relative`} 
+                     style={{ backgroundColor: getTrainColor(train.type) }}>
+                  <TrainIcon className="w-4 h-4 text-white" />
+                  {train.status === 'breakdown' && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full flex items-center justify-center">
+                      <span className="text-white text-xs">!</span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Train Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="font-mono text-sm font-bold text-foreground">{train.id}</span>
+                    <Badge 
+                      variant={train.type === 'Express' ? 'default' : 'secondary'} 
+                      className="text-xs"
+                    >
+                      {train.type}
+                    </Badge>
+                    {train.delay > 0 && (
+                      <Badge variant="destructive" className="text-xs">
+                        +{train.delay}min
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2 text-muted-foreground">
+                      <Clock className="w-3 h-3" />
+                      <span>{train.depart}</span>
+                      <span>•</span>
+                      <span>{train.speed_kmph}km/h</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      {train.status === 'breakdown' ? (
+                        <span className="text-destructive font-medium">BREAKDOWN</span>
+                      ) : isActive ? (
+                        <>
+                          <span className="text-success">Running</span>
+                          <span className="text-muted-foreground">@ {position.toFixed(1)}km</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">Scheduled</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Mini Progress Bar */}
+                  {isActive && position > 0 && (
+                    <div className="mt-2">
+                      <div className="h-1 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r transition-all duration-1000"
+                          style={{ 
+                            width: `${Math.min((position / 75) * 100, 100)}%`,
+                            backgroundColor: getTrainColor(train.type)
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

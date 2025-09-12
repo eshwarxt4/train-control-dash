@@ -4,6 +4,7 @@ import { TimeDistanceGraph } from './TimeDistanceGraph';
 import { RecommendationPanel } from './RecommendationPanel';
 import { ControlPanel } from './ControlPanel';
 import { AuditLog } from './AuditLog';
+import { TrainStatusPanel } from './TrainStatusPanel';
 import { Card } from '@/components/ui/card';
 
 interface DashboardProps {
@@ -61,7 +62,7 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
         </div>
 
         {/* Recommendation Panel - Right Panel */}
-        <div className="col-span-5">
+        <div className="col-span-5 space-y-4">
           {activeRecommendation ? (
             <RecommendationPanel
               recommendation={activeRecommendation}
@@ -71,7 +72,7 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
               onShowSimulation={() => setShowSimulationOverlay(true)}
             />
           ) : (
-            <Card className="h-full p-6 bg-panel border-panel-border flex items-center justify-center">
+            <Card className="h-96 p-6 bg-panel border-panel-border flex items-center justify-center">
               <div className="text-center">
                 <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <div className="w-2 h-2 bg-success rounded-full"></div>
@@ -84,6 +85,13 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
               </div>
             </Card>
           )}
+          
+          {/* Train Status Panel */}
+          <TrainStatusPanel
+            trains={state.trains}
+            currentTime={state.currentTime}
+            calculateTrainPosition={calculateTrainPosition}
+          />
         </div>
 
         {/* Audit Log - Bottom Panel */}
