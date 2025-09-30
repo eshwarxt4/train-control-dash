@@ -1,222 +1,168 @@
 # RAIL-PRISM: AI-Assisted Railway Decision Support System
 
 ![RAIL-PRISM Dashboard](https://img.shields.io/badge/RAIL--PRISM-AI%20Railway%20Control-blue)
-![Status](https://img.shields.io/badge/Status-Demo%20Ready-green)
-![Tech](https://img.shields.io/badge/Tech-React%20%7C%20TypeScript%20%7C%20D3.js-blue)
+![Status](https://img.shields.io/badge/Status-MVP%20Ready-green)
+![Tech](https://img.shields.io/badge/Tech-React%20%7C%20Node.js%20%7C%20MongoDB%20%7C%20Kafka-blue)
 
-A professional, fully interactive frontend demo of RAIL-PRISM — an AI-assisted decision-support dashboard for railway Section Controllers. This system provides real-time train monitoring, intelligent conflict detection, and AI-powered recommendations for optimal railway operations.
+A comprehensive MVP implementation of RAIL-PRISM — an AI-assisted decision support system for railway Section Controllers. This system provides real-time train monitoring, intelligent conflict detection, and AI-powered recommendations for optimal railway operations.
 
-## 🚆 Features
+## 🏗️ Project Structure
 
-### Core Functionality
-- **Real-time Train Visualization**: Interactive time-distance graph showing live train positions
-- **AI Conflict Detection**: Automated detection of potential train conflicts and safety issues
-- **Intelligent Recommendations**: AI-generated solutions with confidence scores and impact analysis
-- **Decision Support**: Accept, simulate, or override AI recommendations with full audit trails
-- **Multi-Role Access**: Controller (full access) and Viewer (read-only) modes
+```
+train-control-dash/
+├── backend/                 # Node.js backend server
+│   ├── src/                # Source code
+│   │   ├── config/         # Configuration files
+│   │   ├── models/         # MongoDB models
+│   │   ├── routes/         # API routes
+│   │   ├── services/       # Business logic
+│   │   └── server.js       # Main server file
+│   ├── package.json        # Backend dependencies
+│   ├── Dockerfile          # Backend container
+│   └── .env.example        # Environment variables template
+├── frontend/               # React frontend application
+│   ├── src/                # Source code
+│   │   ├── components/     # React components
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── services/       # API and WebSocket services
+│   │   ├── types/          # TypeScript type definitions
+│   │   └── main.tsx        # Application entry point
+│   ├── package.json        # Frontend dependencies
+│   ├── vite.config.ts      # Vite configuration
+│   ├── tailwind.config.ts  # Tailwind CSS configuration
+│   └── nginx.conf          # Nginx configuration for Docker
+├── docker-compose.yml      # Multi-service orchestration
+├── Dockerfile.frontend     # Frontend container
+├── start-mvp.sh           # Automated startup script
+├── MVP_README.md         # Detailed MVP documentation
+├── MVP_SUMMARY.md        # Implementation summary
+└── README.md             # This file
+```
 
-### Advanced Features
-- **Simulation Engine**: Client-side discrete-event simulation with realistic train physics
-- **Scenario Management**: Pre-built scenarios including normal operations, planned maintenance, and emergency breakdowns
-- **Audit Trail**: Comprehensive logging of all decisions and system events with JSON export
-- **Professional UI**: Dark-themed control room interface optimized for critical operations
+## 🚀 Quick Start
 
-## 🏃‍♂️ Quick Start
-
-### Prerequisites
-- Node.js 18+ and npm installed ([install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
-
-### Installation & Running
-
+### Option 1: Automated Setup (Recommended)
 ```bash
-# 1. Clone the repository
-git clone <YOUR_GIT_URL>
-cd <YOUR_PROJECT_NAME>
+# Make the startup script executable
+chmod +x start-mvp.sh
 
-# 2. Install dependencies
+# Start the complete MVP system
+./start-mvp.sh
+```
+
+### Option 2: Manual Setup
+```bash
+# 1. Start infrastructure services (MongoDB uses external cloud database)
+docker-compose up -d redis zookeeper kafka
+
+# 2. Install and start backend
+cd backend
 npm install
+npm run dev
 
-# 3. Start the development server
+# 3. Install and start frontend (in new terminal)
+cd frontend
+npm install
 npm run dev
 ```
 
-The application will be available at `http://localhost:8080`
+## 🌐 Access Points
 
-### Alternative: Production Build
+- **Frontend Dashboard**: http://localhost:3000
+- **Backend API**: http://localhost:3001
+- **WebSocket**: ws://localhost:3002
+- **Health Check**: http://localhost:3001/health
+
+## 🎮 Demo Scenarios
+
+1. **Normal Operations**: Smooth train operations with no conflicts
+2. **Planned Maintenance**: Conflict resolution with AI recommendations
+3. **Emergency Breakdown**: Emergency response with cascading effects
+
+## 🏗️ Architecture Overview
+
+### Backend Services
+- **Express.js API**: RESTful endpoints for all operations
+- **WebSocket Server**: Real-time communication
+- **Kafka Streaming**: High-performance data pipeline
+- **MongoDB**: Document-based data storage
+- **Redis**: Caching and session management
+- **AI Optimization Engine**: Conflict resolution algorithms
+
+### Frontend Features
+- **Real-time Dashboard**: Live train monitoring
+- **Interactive Graphs**: D3.js visualizations
+- **Decision Interface**: AI recommendation handling
+- **Metrics Dashboard**: Performance analytics
+- **Responsive Design**: Professional control room UI
+
+## 📊 Key Features
+
+- ✅ **Real-time Train Monitoring**: Live position tracking
+- ✅ **AI Conflict Detection**: Automatic conflict identification
+- ✅ **Intelligent Recommendations**: 3-5 ranked options per conflict
+- ✅ **Decision Support**: Accept/Override functionality
+- ✅ **Comprehensive Metrics**: Performance tracking and analytics
+- ✅ **Professional UI**: Control room-grade interface
+- ✅ **Scalable Architecture**: Production-ready design
+
+## 🔧 Development
+
+### Backend Development
+```bash
+cd backend
+npm run dev          # Start with hot reload
+npm run seed         # Seed database
+npm run simulate     # Start data simulation
+npm test            # Run tests
+```
+
+### Frontend Development
+```bash
+cd frontend
+npm run dev         # Start development server
+npm run build       # Build for production
+npm run preview     # Preview production build
+```
+
+## 📚 Documentation
+
+- **[MVP_README.md](./MVP_README.md)**: Comprehensive setup and usage guide
+- **[MVP_SUMMARY.md](./MVP_SUMMARY.md)**: Implementation summary and features
+- **API Documentation**: Available at `/api/docs` when backend is running
+
+## 🐳 Docker Deployment
 
 ```bash
-# Build for production
-npm run build
+# Start all services
+docker-compose up -d
 
-# Preview production build
-npm run preview
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
 ```
 
-## 🎮 How to Use the Demo
+## 🎯 MVP Success Metrics
 
-### 1. Login & Role Selection
-- Choose between **Controller** (full access) or **Viewer** (read-only)
-- No authentication required - this is a demonstration system
+- **Delay Reduction**: 15-25% improvement
+- **Conflict Resolution**: <5 minutes average
+- **AI Acceptance Rate**: 85-90%
+- **Decision Response Time**: <30 seconds
 
-### 2. Main Dashboard Components
+## 🤝 Contributing
 
-#### **Control Panel (Top)**
-- **Live Clock**: Shows current simulation time
-- **Play/Pause**: Start or stop the simulation
-- **Scenario Selection**: Load different operational scenarios
-- **Status Indicators**: Active trains and conflict alerts
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-#### **Time-Distance Graph (Left)**
-- Vertical axis: Railway stations (A → B → C → D)
-- Horizontal axis: Time progression
-- **Colored lines**: Train trajectories (Blue=Express, Green=Local, Orange=Freight)
-- **Current time line**: Yellow dashed vertical line
-- **Conflict zones**: Red highlighted areas showing potential issues
+## 📄 License
 
-#### **Recommendation Panel (Right)**
-- Appears when conflicts are detected
-- Shows 2-3 AI-generated options with:
-  - Action description and confidence score
-  - Predicted delay and throughput impact
-  - Detailed rationale
-- **Controllers** can Accept, Simulate, or Override recommendations
-- **Viewers** see read-only information
-
-#### **Audit Log (Bottom)**
-- Real-time log of all system events and decisions
-- Filter by event type (recommendations, actions, overrides, failures)
-- Export complete audit trail as JSON
-- Statistics dashboard showing system performance
-
-### 3. Demo Scenarios
-
-#### **Normal Operations**
-- Standard day with 6 trains running normal schedules
-- Good for understanding basic system operation
-
-#### **Planned Maintenance** 
-- Repair window at Station C (11:30-11:50)
-- Shows AI handling of scheduled disruptions
-- Demonstrates conflict between Express E1 and Freight F3
-
-#### **Emergency Breakdown**
-- Freight train F3 breaks down at 11:22 between stations B and C
-- Cascading effects on other trains
-- AI generates emergency response recommendations
-
-### 4. Using the AI Recommender
-
-1. **Load a scenario** with conflicts (Planned Maintenance or Emergency Breakdown)
-2. **Start the simulation** and wait for conflicts to appear
-3. **Review AI options** in the recommendation panel:
-   - Each option shows predicted outcomes
-   - Confidence scores indicate AI certainty
-   - Impact analysis shows delay and throughput effects
-4. **Simulate** an option to see predicted outcomes overlaid on the graph
-5. **Accept** the recommendation or **Override** with a mandatory reason
-6. **Monitor results** in the audit log
-
-## 🏗️ Technical Architecture
-
-### Frontend Stack
-- **React 18** with TypeScript for robust component architecture
-- **D3.js** for sophisticated data visualization and interactive graphs
-- **Tailwind CSS** with custom design system for professional control room aesthetics
-- **Shadcn/ui** components customized for railway operations
-
-### Simulation Engine
-- **Discrete-event simulation** running entirely in the browser
-- **Real-time conflict detection** using headway analysis and position tracking
-- **Physics-based movement** with realistic train speeds and acceleration
-- **Scenario management** with configurable train schedules and infrastructure
-
-### AI Mock System
-- **Rule-based recommender** simulating ML decision trees
-- **Multi-criteria optimization** considering priority, delay, and throughput
-- **Confidence scoring** based on historical pattern matching
-- **Impact prediction** using fast-forward simulation
-
-### Data Management
-- **Client-side JSON data** with sample scenarios embedded
-- **Real-time state management** using React hooks
-- **Local storage** for user preferences and session data
-
-## 📊 Sample Data Structure
-
-The system includes realistic railway operational data:
-
-```json
-{
-  "stations": ["A", "B", "C", "D"],
-  "trains": [
-    {
-      "id": "E1",
-      "type": "Express", 
-      "priority": 10,
-      "start": "A",
-      "depart": "11:10",
-      "speed_kmph": 90
-    }
-  ],
-  "repairs": [
-    {
-      "id": "R-C",
-      "block": "C-loop", 
-      "start": "11:30",
-      "end": "11:50",
-      "flexible": true
-    }
-  ]
-}
-```
-
-## 🔧 Customization
-
-### Adding New Scenarios
-Edit `src/data/scenarios.ts` to add custom operational scenarios with different train schedules and infrastructure events.
-
-### Modifying AI Logic
-Update `src/hooks/useSimulation.ts` in the `generateRecommendations` function to implement different decision-making algorithms.
-
-### UI Themes
-Customize the control room design system in `src/index.css` and `tailwind.config.ts` to match your operational requirements.
-
-## 🎯 Key Demo Points
-
-### For Railway Operations
-- **Real-world accuracy**: Based on actual railway operational procedures
-- **Scalable architecture**: Designed for integration with real railway management systems
-- **Safety-first approach**: All recommendations prioritize operational safety
-
-### For AI/ML Demonstration  
-- **Explainable AI**: Every recommendation includes clear reasoning and confidence metrics
-- **Human-AI collaboration**: Controllers can accept, modify, or override AI suggestions
-- **Continuous learning simulation**: System adapts recommendations based on operational outcomes
-
-### For Technical Stakeholders
-- **Modern web architecture**: Built with industry-standard React ecosystem
-- **Real-time performance**: Handles complex simulations without backend requirements
-- **Professional UX**: Control room-grade interface suitable for 24/7 operations
-
-## 📱 Browser Compatibility
-
-- **Chrome/Edge**: Fully supported with optimal performance
-- **Firefox**: Complete functionality with all features
-- **Safari**: Core features supported (some animations may vary)
-- **Mobile**: Responsive design, optimized for desktop use
-
-## 🚀 Deployment
-
-### Local Deployment
-The built application is a static SPA that can be served from any web server.
-
-### Cloud Deployment
-Compatible with Vercel, Netlify, GitHub Pages, or any static hosting service.
-
-## 📄 License & Usage
-
-This is a demonstration system built for the Smart India Hackathon (SIH). The code is organized and commented for easy handoff and further development.
+This project is built for the Smart India Hackathon (SIH) and is available under the MIT License.
 
 ---
 
-**RAIL-PRISM Demo System** | Built with ❤️ for Smart India Hackathon | Professional Railway AI Control
+**RAIL-PRISM MVP** | Built with ❤️ for Smart India Hackathon | Professional Railway AI Control System

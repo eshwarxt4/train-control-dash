@@ -12,16 +12,25 @@ import {
   Settings, 
   LogOut, 
   Train,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 
 interface ControlPanelProps {
-  state: SimulationState;
+  state: {
+    currentTime: string;
+    isRunning: boolean;
+    trains: any[];
+    conflicts: any[];
+    scenario: any;
+  };
   userRole: 'Controller' | 'Viewer';
   onToggleSimulation: () => void;
   onLoadScenario: (scenarioId: string) => void;
   onLogout: () => void;
   onShowSimulationOverlay: (show: boolean) => void;
+  onRefreshData?: () => void;
+  isWebSocketConnected?: boolean;
 }
 
 export function ControlPanel({
@@ -31,6 +40,8 @@ export function ControlPanel({
   onLoadScenario,
   onLogout,
   onShowSimulationOverlay,
+  onRefreshData,
+  isWebSocketConnected = false,
 }: ControlPanelProps) {
   const runningTrains = state.trains.filter(t => 
     new Date(`2000-01-01 ${state.currentTime}:00`) >= new Date(`2000-01-01 ${t.depart}:00`)
@@ -72,6 +83,12 @@ export function ControlPanel({
                 <span>{state.conflicts.length} Conflict{state.conflicts.length > 1 ? 's' : ''}</span>
               </Badge>
             )}
+            <div className="flex items-center space-x-1">
+              <div className={`w-2 h-2 rounded-full ${isWebSocketConnected ? 'bg-success animate-pulse' : 'bg-destructive'}`} />
+              <span className="text-xs text-muted-foreground">
+                {isWebSocketConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -109,22 +126,18 @@ export function ControlPanel({
             </>
           )}
 
-          {/* Scenario Selection */}
-          <Select onValueChange={onLoadScenario} disabled={state.isRunning}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder={state.scenario?.name || "Select Scenario"} />
-            </SelectTrigger>
-            <SelectContent>
-              {scenarios.map((scenario) => (
-                <SelectItem key={scenario.id} value={scenario.id}>
-                  <div>
-                    <div className="font-medium">{scenario.name}</div>
-                    <div className="text-xs text-muted-foreground">{scenario.description}</div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Refresh Data Button */}
+          {onRefreshData && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRefreshData}
+              className="flex items-center space-x-1"
+            >
+              <RefreshCw className="w-4 h-4" />
+              <span>Refresh</span>
+            </Button>
+          )}
         </div>
 
         {/* Right Section - User & Settings */}
