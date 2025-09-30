@@ -7,6 +7,7 @@ class KafkaClient {
     this.producer = null;
     this.consumer = null;
     this.admin = null;
+    this.consumers = new Map(); // Track multiple consumers
   }
 
   async initialize() {
@@ -92,9 +93,22 @@ class KafkaClient {
 
   async subscribeToTopic(topic, callback) {
     try {
-      await this.consumer.subscribe({ topic, fromBeginning: false });
+      // Create a unique consumer for each topic
+      const consumerId = `${topic}-consumer`;
       
-      await this.consumer.run({
+      if (this.consumers.has(consumerId)) {
+        logger.warn(`Consumer for topic ${topic} already exists`);
+        return;
+      }
+
+      const consumer = this.kafka.consumer({ 
+        groupId: `${process.env.KAFKA_GROUP_ID || 'rail-prism-group'}-${topic}` 
+      });
+      
+      await consumer.connect();
+      await consumer.subscribe({ topic, fromBeginning: false });
+      
+      await consumer.run({
         eachMessage: async ({ topic, partition, message }) => {
           try {
             const messageValue = JSON.parse(message.value.toString());
@@ -105,6 +119,8 @@ class KafkaClient {
         },
       });
 
+      // Store the consumer for cleanup
+      this.consumers.set(consumerId, consumer);
       logger.info(`Subscribed to topic: ${topic}`);
     } catch (error) {
       logger.error(`Error subscribing to topic ${topic}:`, error);
@@ -114,6 +130,18 @@ class KafkaClient {
 
   async disconnect() {
     try {
+      // Disconnect all topic consumers
+      for (const [consumerId, consumer] of this.consumers) {
+        try {
+          await consumer.disconnect();
+          logger.info(`Disconnected consumer: ${consumerId}`);
+        } catch (error) {
+          logger.error(`Error disconnecting consumer ${consumerId}:`, error);
+        }
+      }
+      this.consumers.clear();
+
+      // Disconnect main clients
       if (this.producer) await this.producer.disconnect();
       if (this.consumer) await this.consumer.disconnect();
       if (this.admin) await this.admin.disconnect();

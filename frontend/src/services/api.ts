@@ -176,10 +176,10 @@ class ApiService {
     return response.data.data;
   }
 
-  async selectOptimizationOption(optimizationId: string, optionId: string, controllerId: string, reasoning?: string): Promise<OptimizationResult> {
+  async selectOptimizationOption(optimizationId: string, optionId: string, controllerId?: string, reasoning?: string): Promise<OptimizationResult> {
     const response: AxiosResponse<ApiResponse<OptimizationResult>> = await this.api.put(`/optimization/results/${optimizationId}/select`, {
       optionId,
-      controllerId,
+      controllerId: controllerId || 'demo-controller',
       reasoning
     });
     return response.data.data;
@@ -270,6 +270,37 @@ class ApiService {
   async getHealthStatus(): Promise<HealthStatus> {
     const response: AxiosResponse<HealthStatus> = await this.api.get('/health');
     return response.data;
+  }
+
+  // Simulation Control API methods
+  async getSimulationStatus(): Promise<{
+    isRunning: boolean;
+    simulationTime: string;
+    simulationSpeed: number;
+    trainsCount: number;
+  }> {
+    const response = await this.api.get('/simulation/status');
+    return response.data.data;
+  }
+
+  async startSimulation(): Promise<void> {
+    await this.api.post('/simulation/start');
+  }
+
+  async stopSimulation(): Promise<void> {
+    await this.api.post('/simulation/stop');
+  }
+
+  async setSimulationTime(time: string): Promise<void> {
+    await this.api.post('/simulation/time', { time });
+  }
+
+  async setSimulationSpeed(speed: number): Promise<void> {
+    await this.api.post('/simulation/speed', { speed });
+  }
+
+  async resetSimulation(): Promise<void> {
+    await this.api.post('/simulation/reset');
   }
 }
 
@@ -492,6 +523,11 @@ interface RiskFactor {
 }
 
 interface OptimizationMetrics {
+  totalOptimizations: number;
+  acceptanceRate: number;
+  averageProcessingTime: number;
+  averageConfidence: number;
+  byAlgorithm: Record<string, number>;
   totalConflictsResolved: number;
   averageDelayReduction: number;
   systemEfficiency: number;
@@ -550,7 +586,7 @@ interface DecisionLogInput {
   controllerId: string;
   controllerRole: 'Controller' | 'Viewer';
   decision: 'accepted' | 'rejected' | 'modified' | 'override';
-  selectedOption: DecisionSelectedOption;
+  selectedOption: DecisionSelectedOption | null;
   reasoning: string;
   responseTime: number;
 }

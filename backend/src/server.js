@@ -21,26 +21,28 @@ import trainRoutes from './routes/trains.js';
 import conflictRoutes from './routes/conflicts.js';
 import optimizationRoutes from './routes/optimization.js';
 import decisionRoutes from './routes/decisions.js';
+import simulationRoutes from './routes/simulation.js';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 3001;
+const WS_PORT = process.env.WS_PORT || 3002;
+
+// Create server for both HTTP and WebSocket
 const server = createServer(app);
 const io = new SocketServer(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
-const PORT = process.env.PORT || 3001;
-const WS_PORT = process.env.WS_PORT || 3002;
-
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:3000",
+  origin: "*",
   credentials: true
 }));
 
@@ -73,6 +75,7 @@ app.use('/api/trains', trainRoutes);
 app.use('/api/conflicts', conflictRoutes);
 app.use('/api/optimization', optimizationRoutes);
 app.use('/api/decisions', decisionRoutes);
+app.use('/api/simulation', simulationRoutes);
 
 // WebSocket connection handling
 io.on('connection', (socket) => {
@@ -186,43 +189,41 @@ async function setupKafkaConsumers() {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+async function gracefulShutdown(signal) {
+  logger.info(`${signal} received, shutting down gracefully`);
   
-  // Stop data simulation
-  dataSimulator.stopSimulation();
-  
-  // Disconnect Kafka
-  await kafkaClient.disconnect();
-  
-  // Disconnect database
-  await connectDB.disconnect();
-  
-  // Close server
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
-  });
-});
+  try {
+    // Stop data simulation
+    if (dataSimulator) {
+      await dataSimulator.stopSimulation();
+      logger.info('Data simulator stopped');
+    }
+    
+    // Disconnect Kafka
+    if (kafkaClient) {
+      await kafkaClient.disconnect();
+      logger.info('Kafka disconnected');
+    }
+    
+    // Disconnect database
+    if (connectDB) {
+      await connectDB.disconnect();
+      logger.info('Database disconnected');
+    }
+    
+    // Close server
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
+  } catch (error) {
+    logger.error('Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+}
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  
-  // Stop data simulation
-  dataSimulator.stopSimulation();
-  
-  // Disconnect Kafka
-  await kafkaClient.disconnect();
-  
-  // Disconnect database
-  await connectDB.disconnect();
-  
-  // Close server
-  server.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Start server
 async function startServer() {
@@ -231,7 +232,7 @@ async function startServer() {
     
     server.listen(PORT, () => {
       logger.info(`🚆 RAIL-PRISM Backend Server running on port ${PORT}`);
-      logger.info(`📡 WebSocket server running on port ${WS_PORT}`);
+      logger.info(`📡 WebSocket server running on port ${PORT} (same as HTTP)`);
       logger.info(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`📊 Health check: http://localhost:${PORT}/health`);
     });

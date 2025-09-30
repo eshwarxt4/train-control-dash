@@ -44,7 +44,8 @@ export function ControlPanel({
   isWebSocketConnected = false,
 }: ControlPanelProps) {
   const runningTrains = state.trains.filter(t => 
-    new Date(`2000-01-01 ${state.currentTime}:00`) >= new Date(`2000-01-01 ${t.depart}:00`)
+    t.route && t.route.length > 0 && 
+    new Date(`2000-01-01 ${state.currentTime}:00`) >= new Date(`2000-01-01 ${t.route[0]?.departureTime || '06:00'}:00`)
   ).length;
 
   return (

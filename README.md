@@ -41,7 +41,16 @@ train-control-dash/
 
 ## 🚀 Quick Start
 
-### Option 1: Automated Setup (Recommended)
+### Development Environment (Recommended for Development)
+```bash
+# Start development environment with hot reloading
+./start-dev.sh
+
+# Or start with local MongoDB
+./start-dev.sh --with-mongo
+```
+
+### Production Environment (For Demo/Production)
 ```bash
 # Make the startup script executable
 chmod +x start-mvp.sh
@@ -68,6 +77,13 @@ npm run dev
 
 ## 🌐 Access Points
 
+### Development Environment
+- **Frontend Dashboard**: http://localhost:3000 (with hot reload)
+- **Backend API**: http://localhost:3001 (with hot reload)
+- **WebSocket**: ws://localhost:3002
+- **Health Check**: http://localhost:3001/health
+
+### Production Environment
 - **Frontend Dashboard**: http://localhost:3000
 - **Backend API**: http://localhost:3001
 - **WebSocket**: ws://localhost:3002

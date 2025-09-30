@@ -20,7 +20,8 @@ interface TrainStatusPanelProps {
 }
 
 export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }: TrainStatusPanelProps) {
-  const parseTime = (timeStr: string): Date => {
+  const parseTime = (timeStr: string | undefined): Date => {
+    if (!timeStr) return new Date();
     const [hours, minutes] = timeStr.split(':').map(Number);
     const date = new Date();
     date.setHours(hours, minutes, 0, 0);
@@ -90,7 +91,8 @@ export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }
         <ScrollArea className="h-64">
           <div className="space-y-2">
             {trains.map(train => {
-              const isActive = parseTime(currentTime) >= parseTime(train.depart);
+              const departTime = train.depart || '00:00';
+              const isActive = parseTime(currentTime) >= parseTime(departTime);
               const position = calculateTrainPosition(train, currentTime);
               const progress = Math.min((position / 75) * 100, 100);
               
@@ -98,7 +100,7 @@ export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }
                 <div
                   key={train.id}
                   className={`p-3 rounded-lg border transition-all ${
-                    train.status === 'breakdown' 
+                    train.status === 'delayed' || train.status === 'breakdown' 
                       ? 'bg-destructive/5 border-destructive/30' 
                       : isActive 
                         ? 'bg-primary/5 border-primary/30' 
@@ -128,7 +130,7 @@ export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }
                     </div>
                     
                     <div className="text-right">
-                      {train.status === 'breakdown' ? (
+                      {train.status === 'delayed' || train.status === 'breakdown' ? (
                         <Badge variant="destructive" className="text-xs">
                           <AlertTriangle className="w-3 h-3 mr-1" />
                           BREAKDOWN
@@ -156,11 +158,11 @@ export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }
                   <div className="flex items-center justify-between text-xs mb-2">
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <MapPin className="w-3 h-3" />
-                      <span>{train.start} → {train.route[train.route.length - 1]}</span>
+                      <span>{train.route?.[0]?.stationName || 'Unknown'} → {train.route?.[train.route.length - 1]?.stationName || 'Unknown'}</span>
                     </div>
                     <div className="flex items-center space-x-1 text-muted-foreground">
                       <Clock className="w-3 h-3" />
-                      <span>Depart {train.depart}</span>
+                      <span>Depart {departTime}</span>
                     </div>
                   </div>
 
@@ -184,7 +186,7 @@ export function TrainStatusPanel({ trains, currentTime, calculateTrainPosition }
                   )}
 
                   {/* Emergency Alert */}
-                  {train.status === 'breakdown' && (
+                  {(train.status === 'delayed' || train.status === 'breakdown') && (
                     <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded text-xs">
                       <div className="flex items-center space-x-1 text-destructive font-medium">
                         <AlertTriangle className="w-3 h-3" />

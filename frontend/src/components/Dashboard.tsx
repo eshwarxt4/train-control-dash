@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useRealTimeSimulation } from '@/hooks/useRealTimeSimulation';
+import { useSimulation } from '@/hooks/useSimulation';
 import { TimeDistanceGraph } from './TimeDistanceGraph';
 import { RecommendationPanel } from './RecommendationPanel';
 import { ControlPanel } from './ControlPanel';
 import { AuditLog } from './AuditLog';
 import { TrainStatusPanel } from './TrainStatusPanel';
 import { MetricsDashboard } from './MetricsDashboard';
+import { SimulationControls } from './SimulationControls';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -16,9 +17,20 @@ interface DashboardProps {
 
 export function Dashboard({ userRole, onLogout }: DashboardProps) {
   const {
-    state,
-    startSimulation,
-    stopSimulation,
+    currentTime,
+    simulationTime,
+    isRunning,
+    speed,
+    trains,
+    activeTrains,
+    conflicts,
+    optimizationResults,
+    systemStatus,
+    play,
+    pause,
+    setSpeed,
+    setTime,
+    reset,
     generateOptimization,
     selectOptimizationOption,
     simulateOptimizationOption,
@@ -26,38 +38,82 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
     refreshData,
     calculateTrainPosition,
     isWebSocketConnected
-  } = useRealTimeSimulation();
+  } = useSimulation();
 
   const [showSimulationOverlay, setShowSimulationOverlay] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Start simulation on mount
-  useEffect(() => {
-    startSimulation();
-  }, [startSimulation]);
+  const activeRecommendation = optimizationResults.find(r => !r.selectedOption);
+  const uiRecommendation = activeRecommendation && {
+    conflictId: activeRecommendation.conflictId,
+    timestamp: activeRecommendation.timestamp,
+    options: activeRecommendation.options.map(opt => ({
+      id: opt.optionId,
+      action: opt.action,
+      description: opt.description,
+      predictedDelay: opt.predictedOutcomes.totalDelay,
+      throughputImpact: opt.predictedOutcomes.throughputImpact,
+      confidence: opt.confidence,
+      details: `feasibility:${opt.feasibility}; impl:${opt.implementationTime}ms`
+    })),
+    selectedOption: activeRecommendation.selectedOption,
+    overrideReason: undefined
+  } as any;
 
-  const activeRecommendation = state.optimizationResults.find(r => !r.selectedOption);
+  // Adapt API TrainSchedule -> UI Train, and API Conflict -> UI Conflict
+  const uiTrains = trains.map(t => ({
+    id: t.trainId,
+    type: (t.trainType === 'Express' || t.trainType === 'Local' || t.trainType === 'Freight') ? t.trainType : 'Local',
+    priority: t.priority,
+    start: t.route?.[0]?.stationId || '',
+    depart: t.route?.[0]?.departureTime || '00:00',
+    speed_kmph: t.averageSpeed,
+    length: undefined,
+    currentPosition: undefined,
+    currentBlock: undefined,
+    status: (t.status === 'cancelled' ? 'delayed' : (t.status === 'completed' ? 'scheduled' : t.status)) as any,
+    delay: t.totalDelay || 0,
+    route: t.route?.map(r => r.stationId) || []
+  }));
+
+  const uiConflicts = conflicts.map(c => ({
+    id: c.conflictId,
+    trains: c.trains.map(ct => ct.trainId),
+    block: c.location.blockId,
+    time: c.conflictTime,
+    severity: (c.severity === 'low' || c.severity === 'medium' || c.severity === 'high') ? c.severity : 'high',
+    description: c.description
+  }));
+
+  const calcPositionForUiTrain = (train: any, time: string) => {
+    const scheduleLike: any = {
+      route: [ { departureTime: train.depart } ],
+      averageSpeed: train.speed_kmph,
+      totalDistance: 75
+    };
+    return calculateTrainPosition(scheduleLike, time);
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Top Control Panel */}
       <ControlPanel
         state={{
-          currentTime: state.currentTime,
-          isRunning: state.isRunning,
-          trains: state.trains,
-          conflicts: state.conflicts,
+          currentTime: currentTime,
+          isRunning: isRunning,
+          trains: trains,
+          conflicts: conflicts,
           scenario: null
         }}
         userRole={userRole}
-        onToggleSimulation={state.isRunning ? stopSimulation : startSimulation}
+        onToggleSimulation={isRunning ? pause : play}
         onLoadScenario={() => {}} // Not used in real-time mode
         onLogout={onLogout}
         onShowSimulationOverlay={setShowSimulationOverlay}
         onRefreshData={refreshData}
         isWebSocketConnected={isWebSocketConnected}
       />
-
+      
       {/* Main Dashboard with Tabs */}
       <div className="flex-1 p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
@@ -75,10 +131,10 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
                 <Card className="h-full p-4 bg-graph border-panel-border">
                   <h3 className="text-lg font-semibold mb-4 text-foreground">Time-Distance Graph</h3>
                   <TimeDistanceGraph
-                    trains={state.trains}
-                    currentTime={state.currentTime}
-                    conflicts={state.conflicts}
-                    calculateTrainPosition={calculateTrainPosition}
+                    trains={uiTrains as any}
+                    currentTime={currentTime}
+                    conflicts={uiConflicts as any}
+                    calculateTrainPosition={calcPositionForUiTrain as any}
                     showSimulationOverlay={showSimulationOverlay}
                   />
                 </Card>
@@ -86,13 +142,24 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
 
               {/* Recommendation Panel - Right Panel */}
               <div className="col-span-5 space-y-4">
+                <SimulationControls
+                  currentTime={currentTime}
+                  isRunning={isRunning}
+                  speed={speed}
+                  onPlay={play}
+                  onPause={pause}
+                  onSetSpeed={setSpeed}
+                  onSetTime={setTime}
+                  onReset={reset}
+                />
+                
                 {activeRecommendation ? (
                   <RecommendationPanel
-                    recommendation={activeRecommendation}
+                    recommendation={uiRecommendation}
                     userRole={userRole}
                     onApplyRecommendation={async (conflictId, optionId) => {
                       try {
-                        await selectOptimizationOption(activeRecommendation.optimizationId, optionId, userRole);
+                        await selectOptimizationOption(activeRecommendation.optimizationId, optionId);
                         await logDecision({
                           conflictId,
                           optimizationId: activeRecommendation.optimizationId,
@@ -142,7 +209,7 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
                       </div>
                       <h3 className="text-lg font-semibold text-foreground mb-2">All Clear</h3>
                       <p className="text-muted-foreground">No active conflicts detected</p>
-                      {state.conflicts.length === 0 && state.trains.length > 0 && (
+                      {conflicts.length === 0 && trains.length > 0 && (
                         <p className="text-sm text-success mt-2">✓ Traffic flowing normally</p>
                       )}
                     </div>
@@ -151,9 +218,9 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
                 
                 {/* Train Status Panel */}
                 <TrainStatusPanel
-                  trains={state.trains}
-                  currentTime={state.currentTime}
-                  calculateTrainPosition={calculateTrainPosition}
+                  trains={uiTrains as any}
+                  currentTime={currentTime}
+                  calculateTrainPosition={calcPositionForUiTrain as any}
                 />
               </div>
             </div>
@@ -161,7 +228,9 @@ export function Dashboard({ userRole, onLogout }: DashboardProps) {
 
           {/* Metrics Dashboard Tab */}
           <TabsContent value="metrics" className="h-full">
-            <MetricsDashboard userRole={userRole} />
+            <MetricsDashboard 
+              userRole={userRole}
+            />
           </TabsContent>
 
           {/* Audit Log Tab */}

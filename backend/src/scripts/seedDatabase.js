@@ -6,10 +6,19 @@ async function seedDatabase() {
   try {
     // Connect to database
     await database.connect();
-    
-    // Clear existing data
-    await TrainSchedule.deleteMany({});
-    
+
+    // Drop collection if it exists (avoids duplicate key issues)
+    try {
+      await TrainSchedule.collection.drop();
+      console.log("🗑️ Dropped existing TrainSchedule collection");
+    } catch (err) {
+      if (err.code === 26) {
+        console.log("ℹ️ Collection does not exist, skipping drop");
+      } else {
+        throw err;
+      }
+    }
+
     // Sample train schedules
     const sampleTrains = [
       {
@@ -66,15 +75,15 @@ async function seedDatabase() {
         totalDelay: 0
       }
     ];
-    
+
     // Insert sample data
     await TrainSchedule.insertMany(sampleTrains);
-    
-    logger.info(`Seeded database with ${sampleTrains.length} train schedules`);
+
+    logger.info(`✅ Seeded database with ${sampleTrains.length} train schedules`);
     console.log(`✅ Database seeded successfully with ${sampleTrains.length} train schedules`);
-    
+
   } catch (error) {
-    logger.error('Failed to seed database:', error);
+    logger.error('❌ Failed to seed database:', error);
     console.error('❌ Failed to seed database:', error.message);
     process.exit(1);
   } finally {

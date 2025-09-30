@@ -31,7 +31,8 @@ export function TimeDistanceGraph({
     }
   };
 
-  const parseTime = (timeStr: string): number => {
+  const parseTime = (timeStr: string | undefined): number => {
+    if (!timeStr) return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes; // Convert to minutes since midnight
   };
@@ -193,14 +194,14 @@ export function TimeDistanceGraph({
           .attr("stroke", `url(#gradient-${train.id})`)
           .attr("stroke-width", 3)
           .attr("d", line)
-          .attr("stroke-dasharray", train.status === 'breakdown' ? "5,5" : "none");
+          .attr("stroke-dasharray", (train.status === 'delayed') ? "5,5" : "none");
 
         // Current position marker with enhanced visual
         const currentPos = calculateTrainPosition(train, currentTime);
         const isRunning = parseTime(currentTime) >= parseTime(train.depart);
         if (currentPos > 0 && currentPos <= 75) {
           // Outer glow for running trains
-          if (isRunning && train.status !== 'breakdown') {
+          if (isRunning && train.status !== 'delayed' && train.status !== 'breakdown') {
             g.append("circle")
               .attr("cx", currentTimeLine)
               .attr("cy", yScale(currentPos))
@@ -273,7 +274,7 @@ export function TimeDistanceGraph({
             .text(train.id);
 
           // Speed indicator (small arrow for direction/movement)
-          if (isRunning && train.status !== 'breakdown') {
+          if (isRunning && train.status !== 'delayed' && train.status !== 'breakdown') {
             trainMarker.append("polygon")
               .attr("points", "8,0 12,2 12,-2")
               .attr("fill", "white")
@@ -376,14 +377,15 @@ export function TimeDistanceGraph({
         
         <div className="grid grid-cols-1 gap-2">
           {trains.map(train => {
-            const isActive = parseTime(currentTime) >= parseTime(train.depart);
+            const departTime = train.depart || '00:00';
+            const isActive = parseTime(currentTime) >= parseTime(departTime);
             const position = calculateTrainPosition(train, currentTime);
             
             return (
               <div
                 key={train.id}
                 className={`flex items-center space-x-3 p-3 bg-panel rounded-lg border transition-all ${
-                  train.status === 'breakdown' 
+                  train.status === 'delayed' || train.status === 'breakdown' 
                     ? 'border-destructive/50 bg-destructive/5' 
                     : isActive 
                       ? 'border-primary/30 bg-primary/5' 
@@ -394,7 +396,7 @@ export function TimeDistanceGraph({
                 <div className={`w-10 h-6 rounded flex items-center justify-center relative`} 
                      style={{ backgroundColor: getTrainColor(train.type) }}>
                   <TrainIcon className="w-4 h-4 text-white" />
-                  {train.status === 'breakdown' && (
+                  {(train.status === 'delayed' || train.status === 'breakdown') && (
                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full flex items-center justify-center">
                       <span className="text-white text-xs">!</span>
                     </div>
@@ -421,13 +423,13 @@ export function TimeDistanceGraph({
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-2 text-muted-foreground">
                       <Clock className="w-3 h-3" />
-                      <span>{train.depart}</span>
+                      <span>{departTime}</span>
                       <span>•</span>
                       <span>{train.speed_kmph}km/h</span>
                     </div>
                     
                     <div className="flex items-center space-x-1">
-                      {train.status === 'breakdown' ? (
+                      {train.status === 'delayed' || train.status === 'breakdown' ? (
                         <span className="text-destructive font-medium">BREAKDOWN</span>
                       ) : isActive ? (
                         <>

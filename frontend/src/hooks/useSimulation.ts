@@ -1,275 +1,317 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SimulationState, Train, Conflict, Recommendation, AuditEntry, Scenario, RecommendationOption } from '@/types/rail';
-import { scenarios, stations } from '@/data/scenarios';
+import { apiService, TrainSchedule, TrainPosition, Conflict, OptimizationResult } from '@/services/api';
+import { websocketService, TrainPositionUpdate, TrainEvent, Conflict as WSConflict } from '@/services/websocket';
 
-const SIMULATION_INTERVAL = 1000; // 1 second real time
-const TIME_MULTIPLIER = 60; // 1 minute simulation time per second
+interface SimulationState {
+  currentTime: string;
+  simulationTime: Date;
+  isRunning: boolean;
+  speed: number; // 1x, 2x, 5x, 10x
+  trains: TrainSchedule[];
+  activeTrains: TrainPosition[];
+  conflicts: Conflict[];
+  optimizationResults: OptimizationResult[];
+  systemStatus: {
+    totalTrains: number;
+    activeTrains: number;
+    conflicts: number;
+    averageDelay: number;
+  };
+}
 
-export function useSimulation() {
+interface SimulationControls {
+  play: () => void;
+  pause: () => void;
+  setSpeed: (speed: number) => void;
+  setTime: (time: string) => void;
+  reset: () => void;
+  generateOptimization: (conflictId: string) => Promise<void>;
+  selectOptimizationOption: (optimizationId: string, optionId: string) => Promise<void>;
+  simulateOptimizationOption: (optimizationId: string, optionId: string) => Promise<void>;
+  logDecision: (decision: any) => Promise<void>;
+  refreshData: () => Promise<void>;
+  calculateTrainPosition: (train: TrainSchedule, time: string) => number;
+  isWebSocketConnected: boolean;
+}
+
+export function useSimulation(): SimulationState & SimulationControls {
   const [state, setState] = useState<SimulationState>({
-    currentTime: '11:00',
+    currentTime: '06:00', // Start at 6 AM
+    simulationTime: new Date('2024-01-01T06:00:00'),
     isRunning: false,
     speed: 1,
     trains: [],
+    activeTrains: [],
     conflicts: [],
-    recommendations: [],
-    auditLog: [],
-    scenario: null,
+    optimizationResults: [],
+    systemStatus: {
+      totalTrains: 0,
+      activeTrains: 0,
+      conflicts: 0,
+      averageDelay: 0
+    }
   });
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsConnectedRef = useRef(false);
 
-  const parseTime = (timeStr: string): Date => {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours, minutes, 0, 0);
-    return date;
-  };
+  // Initialize simulation
+  const initializeSimulation = useCallback(async () => {
+    try {
+      // Load initial data
+      const [trains, activeTrains, conflicts, systemStatus] = await Promise.all([
+        apiService.getTrainSchedules({ limit: 50 }),
+        apiService.getActiveTrains(20),
+        apiService.getActiveConflicts(),
+        apiService.getSystemStatus()
+      ]);
 
-  const formatTime = (date: Date): string => {
-    return date.toTimeString().slice(0, 5);
-  };
+      setState(prev => ({
+        ...prev,
+        trains,
+        activeTrains,
+        conflicts,
+        systemStatus
+      }));
 
-  const addMinutes = (timeStr: string, minutes: number): string => {
-    const date = parseTime(timeStr);
-    date.setMinutes(date.getMinutes() + minutes);
-    return formatTime(date);
-  };
+      // Connect to WebSocket for real-time updates
+      if (!wsConnectedRef.current) {
+        await websocketService.connect();
+        wsConnectedRef.current = true;
 
-  const getTimeDifferenceMinutes = (time1: string, time2: string): number => {
-    const date1 = parseTime(time1);
-    const date2 = parseTime(time2);
-    return Math.round((date1.getTime() - date2.getTime()) / 60000);
-  };
+        // Set up WebSocket listeners
+        websocketService.onTrainPositionUpdate((update: TrainPositionUpdate) => {
+          setState(prev => ({
+            ...prev,
+            activeTrains: prev.activeTrains.map(train => 
+              train.trainId === update.trainId 
+                ? { ...train, ...update }
+                : train
+            )
+          }));
+        });
 
-  // Calculate train position based on current time
-  const calculateTrainPosition = useCallback((train: Train, currentTime: string): number => {
-    const departTime = parseTime(train.depart);
-    const currentDateTime = parseTime(currentTime);
-    
-    if (currentDateTime < departTime) {
-      return 0; // Train hasn't departed yet
-    }
+        websocketService.onTrainEvent((event: TrainEvent) => {
+          console.log('Train event:', event);
+          // Handle train events (delays, breakdowns, etc.)
+        });
 
-    const minutesElapsed = (currentDateTime.getTime() - departTime.getTime()) / 60000;
-    const distanceCovered = (train.speed_kmph / 60) * minutesElapsed; // km
-    
-    // Simple linear position along route
-    return Math.min(distanceCovered, 75); // Max 75km (A to D)
-  }, []);
-
-  // Detect conflicts between trains
-  const detectConflicts = useCallback((trains: Train[], currentTime: string): Conflict[] => {
-    const conflicts: Conflict[] = [];
-    const runningTrains = trains.filter(t => 
-      parseTime(currentTime) >= parseTime(t.depart) && t.status !== 'breakdown'
-    );
-
-    for (let i = 0; i < runningTrains.length; i++) {
-      for (let j = i + 1; j < runningTrains.length; j++) {
-        const train1 = runningTrains[i];
-        const train2 = runningTrains[j];
-        
-        const pos1 = calculateTrainPosition(train1, currentTime);
-        const pos2 = calculateTrainPosition(train2, currentTime);
-        
-        // Check if trains are too close (within 5km)
-        if (Math.abs(pos1 - pos2) < 5 && pos1 > 0 && pos2 > 0) {
-          conflicts.push({
-            id: `conflict-${train1.id}-${train2.id}`,
-            trains: [train1.id, train2.id],
-            block: pos1 < 25 ? 'A-B' : pos1 < 50 ? 'B-C' : 'C-D',
-            time: currentTime,
-            severity: train1.type === 'Express' || train2.type === 'Express' ? 'high' : 'medium',
-            description: `${train1.id} (${train1.type}) and ${train2.id} (${train2.type}) conflict detected`,
-          });
-        }
-      }
-    }
-
-    return conflicts;
-  }, [calculateTrainPosition]);
-
-  // Generate AI recommendations for conflicts
-  const generateRecommendations = useCallback((conflicts: Conflict[], trains: Train[]): Recommendation[] => {
-    return conflicts.map(conflict => {
-      const conflictTrains = trains.filter(t => conflict.trains.includes(t.id));
-      const options: RecommendationOption[] = [];
-
-      // Option 1: Hold lower priority train
-      const lowerPriorityTrain = conflictTrains.reduce((min, train) => 
-        train.priority < min.priority ? train : min
-      );
-      
-      options.push({
-        id: `hold-${lowerPriorityTrain.id}`,
-        action: 'hold',
-        description: `Hold ${lowerPriorityTrain.id} for 10 minutes`,
-        predictedDelay: 10,
-        throughputImpact: -2,
-        confidence: 0.85,
-        details: `Priority-based holding strategy`,
-      });
-
-      // Option 2: Reroute via loop (if available)
-      if (conflict.block === 'B-C') {
-        options.push({
-          id: `reroute-${conflictTrains[0].id}`,
-          action: 'reroute',
-          description: `Reroute ${conflictTrains[0].id} via B-loop`,
-          predictedDelay: 5,
-          throughputImpact: 0,
-          confidence: 0.92,
-          details: `Use alternate loop track at Station B`,
+        websocketService.onConflict((conflict: WSConflict) => {
+          setState(prev => ({
+            ...prev,
+            conflicts: [...prev.conflicts, conflict]
+          }));
         });
       }
 
-      // Option 3: Speed adjustment
-      const fasterTrain = conflictTrains.reduce((max, train) => 
-        train.speed_kmph > max.speed_kmph ? train : max
-      );
-      
-      options.push({
-        id: `speed-${fasterTrain.id}`,
-        action: 'adjust_speed',
-        description: `Reduce ${fasterTrain.id} speed by 15%`,
-        predictedDelay: 3,
-        throughputImpact: -1,
-        confidence: 0.75,
-        details: `Temporary speed reduction to create separation`,
-      });
-
-      return {
-        conflictId: conflict.id,
-        timestamp: new Date().toISOString(),
-        options,
-      };
-    });
-  }, []);
-
-  // Simulation step function
-  const simulationStep = useCallback(() => {
-    setState(prevState => {
-      if (!prevState.isRunning) return prevState;
-
-      const newTime = addMinutes(prevState.currentTime, 1 * prevState.speed);
-      const updatedTrains = prevState.trains.map(train => ({
-        ...train,
-        currentPosition: calculateTrainPosition(train, newTime),
-      }));
-
-      // Check for breakdown scenario
-      if (prevState.scenario?.id === 'breakdown-scenario' && newTime === '11:22') {
-        const f3Index = updatedTrains.findIndex(t => t.id === 'F3');
-        if (f3Index !== -1) {
-          updatedTrains[f3Index] = { ...updatedTrains[f3Index], status: 'breakdown' };
-        }
-      }
-
-      const newConflicts = detectConflicts(updatedTrains, newTime);
-      const newRecommendations = generateRecommendations(newConflicts, updatedTrains);
-
-      return {
-        ...prevState,
-        currentTime: newTime,
-        trains: updatedTrains,
-        conflicts: newConflicts,
-        recommendations: [...prevState.recommendations, ...newRecommendations],
-      };
-    });
-  }, [calculateTrainPosition, detectConflicts, generateRecommendations]);
-
-  // Start/stop simulation
-  const toggleSimulation = useCallback(() => {
-    setState(prev => ({ ...prev, isRunning: !prev.isRunning }));
-  }, []);
-
-  // Load scenario
-  const loadScenario = useCallback((scenarioId: string) => {
-    const scenario = scenarios.find(s => s.id === scenarioId);
-    if (scenario) {
-      setState(prev => ({
-        ...prev,
-        scenario,
-        trains: [...scenario.trains],
-        currentTime: scenario.initialTime,
-        isRunning: false,
-        conflicts: [],
-        recommendations: [],
-      }));
+    } catch (error) {
+      console.error('Failed to initialize simulation:', error);
     }
   }, []);
 
-  // Apply recommendation
-  const applyRecommendation = useCallback((recommendationId: string, optionId: string) => {
+  // Simulation time ticker
+  const tickSimulation = useCallback(() => {
     setState(prev => {
-      const recommendation = prev.recommendations.find(r => r.conflictId === recommendationId);
-      const option = recommendation?.options.find(o => o.id === optionId);
+      const newTime = new Date(prev.simulationTime.getTime() + (60000 * prev.speed)); // Add minutes based on speed
+      const timeString = newTime.toLocaleTimeString('en-GB', { 
+        hour12: false, 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
       
-      if (!recommendation || !option) return prev;
-
-      const auditEntry: AuditEntry = {
-        id: `action-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'action',
-        user: 'Controller',
-        description: `Applied: ${option.description}`,
-        data: { recommendation, option },
-      };
-
       return {
         ...prev,
-        auditLog: [...prev.auditLog, auditEntry],
+        simulationTime: newTime,
+        currentTime: timeString
       };
     });
   }, []);
 
-  // Override recommendation
-  const overrideRecommendation = useCallback((recommendationId: string, reason: string) => {
-    setState(prev => {
-      const recommendation = prev.recommendations.find(r => r.conflictId === recommendationId);
-      if (!recommendation) return prev;
+  // Start simulation
+  const play = useCallback(async () => {
+    if (state.isRunning) return;
+    
+    try {
+      await apiService.startSimulation();
+      setState(prev => ({ ...prev, isRunning: true }));
+      intervalRef.current = setInterval(tickSimulation, 1000); // Update every second
+    } catch (error) {
+      console.error('Failed to start simulation:', error);
+    }
+  }, [state.isRunning, tickSimulation]);
 
-      const auditEntry: AuditEntry = {
-        id: `override-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'override',
-        user: 'Controller',
-        description: `Override: ${reason}`,
-        data: { recommendation, reason },
-      };
-
-      return {
-        ...prev,
-        auditLog: [...prev.auditLog, auditEntry],
-      };
-    });
-  }, []);
-
-  // Set up simulation interval
-  useEffect(() => {
-    if (state.isRunning) {
-      intervalRef.current = setInterval(simulationStep, SIMULATION_INTERVAL);
-    } else {
+  // Pause simulation
+  const pause = useCallback(async () => {
+    try {
+      await apiService.stopSimulation();
+      setState(prev => ({ ...prev, isRunning: false }));
+      
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+    } catch (error) {
+      console.error('Failed to stop simulation:', error);
     }
+  }, []);
 
+  // Set simulation speed
+  const setSpeed = useCallback(async (speed: number) => {
+    try {
+      await apiService.setSimulationSpeed(speed);
+      setState(prev => ({ ...prev, speed }));
+    } catch (error) {
+      console.error('Failed to set simulation speed:', error);
+    }
+  }, []);
+
+  // Set simulation time
+  const setTime = useCallback(async (time: string) => {
+    try {
+      await apiService.setSimulationTime(time);
+      const [hours, minutes] = time.split(':').map(Number);
+      const newTime = new Date('2024-01-01T06:00:00');
+      newTime.setHours(hours, minutes, 0, 0);
+      
+      setState(prev => ({
+        ...prev,
+        simulationTime: newTime,
+        currentTime: time
+      }));
+    } catch (error) {
+      console.error('Failed to set simulation time:', error);
+    }
+  }, []);
+
+  // Reset simulation
+  const reset = useCallback(async () => {
+    try {
+      await apiService.resetSimulation();
+      await pause();
+      await setTime('06:00');
+      await setSpeed(1);
+    } catch (error) {
+      console.error('Failed to reset simulation:', error);
+    }
+  }, [pause, setTime, setSpeed]);
+
+  // Calculate train position based on simulation time
+  const calculateTrainPosition = useCallback((train: TrainSchedule, time: string): number => {
+    if (!train.route || train.route.length === 0) return 0;
+    
+    const [currentHours, currentMinutes] = time.split(':').map(Number);
+    const currentTimeMinutes = currentHours * 60 + currentMinutes;
+    
+    const departTime = train.route[0]?.departureTime || '06:00';
+    const [departHours, departMinutes] = departTime.split(':').map(Number);
+    const departTimeMinutes = departHours * 60 + departMinutes;
+    
+    if (currentTimeMinutes < departTimeMinutes) return 0;
+    
+    const elapsedMinutes = currentTimeMinutes - departTimeMinutes;
+    const distance = (elapsedMinutes / 60) * train.averageSpeed;
+    
+    return Math.min(distance, train.totalDistance);
+  }, []);
+
+  // Generate optimization for conflict
+  const generateOptimization = useCallback(async (conflictId: string) => {
+    try {
+      const result = await apiService.generateOptimization(conflictId);
+      setState(prev => ({
+        ...prev,
+        optimizationResults: [...prev.optimizationResults, result]
+      }));
+    } catch (error) {
+      console.error('Failed to generate optimization:', error);
+    }
+  }, []);
+
+  // Select optimization option
+  const selectOptimizationOption = useCallback(async (optimizationId: string, optionId: string, controllerId?: string) => {
+    try {
+      await apiService.selectOptimizationOption(optimizationId, optionId, controllerId);
+      setState(prev => ({
+        ...prev,
+        optimizationResults: prev.optimizationResults.map(result =>
+          result.optimizationId === optimizationId
+            ? { ...result, selectedOption: optionId, status: 'accepted' }
+            : result
+        )
+      }));
+    } catch (error) {
+      console.error('Failed to select optimization option:', error);
+    }
+  }, []);
+
+  // Simulate optimization option
+  const simulateOptimizationOption = useCallback(async (optimizationId: string, optionId: string) => {
+    try {
+      const result = await apiService.simulateOptimizationOption(optimizationId, optionId);
+      console.log('Simulation result:', result);
+    } catch (error) {
+      console.error('Failed to simulate optimization option:', error);
+    }
+  }, []);
+
+  // Log decision
+  const logDecision = useCallback(async (decision: any) => {
+    try {
+      await apiService.logDecision(decision);
+    } catch (error) {
+      console.error('Failed to log decision:', error);
+    }
+  }, []);
+
+  // Refresh data
+  const refreshData = useCallback(async () => {
+    try {
+      const [trains, activeTrains, conflicts, systemStatus] = await Promise.all([
+        apiService.getTrainSchedules({ limit: 50 }),
+        apiService.getActiveTrains(20),
+        apiService.getActiveConflicts(),
+        apiService.getSystemStatus()
+      ]);
+
+      setState(prev => ({
+        ...prev,
+        trains,
+        activeTrains,
+        conflicts,
+        systemStatus
+      }));
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
+  }, []);
+
+  // Initialize on mount
+  useEffect(() => {
+    initializeSimulation();
+    
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      if (wsConnectedRef.current) {
+        websocketService.disconnect();
+      }
     };
-  }, [state.isRunning, simulationStep]);
+  }, [initializeSimulation]);
 
   return {
-    state,
-    toggleSimulation,
-    loadScenario,
-    applyRecommendation,
-    overrideRecommendation,
+    ...state,
+    play,
+    pause,
+    setSpeed,
+    setTime,
+    reset,
+    generateOptimization,
+    selectOptimizationOption,
+    simulateOptimizationOption,
+    logDecision,
+    refreshData,
     calculateTrainPosition,
+    isWebSocketConnected: wsConnectedRef.current
   };
 }

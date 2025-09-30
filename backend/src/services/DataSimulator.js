@@ -10,6 +10,8 @@ class DataSimulator {
   constructor() {
     this.isRunning = false;
     this.simulationInterval = null;
+    this.simulationTime = new Date('2024-01-01T06:00:00'); // Start at 6 AM
+    this.simulationSpeed = 1; // 1x speed
     this.trains = [];
     this.stations = [
       { id: 'A', name: 'Station Alpha', position: 0, platforms: ['1', '2'] },
@@ -44,6 +46,9 @@ class DataSimulator {
    * Generate realistic train schedules for the day
    */
   async generateTrainSchedules() {
+    // Clear existing schedules to avoid duplicates
+    await TrainSchedule.deleteMany({});
+    
     const schedules = [];
     const currentDate = moment().format('YYYY-MM-DD');
     
@@ -52,15 +57,19 @@ class DataSimulator {
       { id: 'E001', number: '12001', type: 'Rajdhani', priority: 10, speed: 120 },
       { id: 'E002', number: '12002', type: 'Rajdhani', priority: 10, speed: 115 },
       { id: 'E003', number: '12003', type: 'Shatabdi', priority: 9, speed: 110 },
-      { id: 'E004', number: '12004', type: 'Express', priority: 8, speed: 100 }
+      { id: 'E004', number: '12004', type: 'Shatabdi', priority: 9, speed: 105 },
+      { id: 'E005', number: '12005', type: 'Express', priority: 8, speed: 100 },
+      { id: 'E006', number: '12006', type: 'Express', priority: 8, speed: 95 }
     ];
 
     // Local trains
     const localTrains = [
       { id: 'L001', number: '12345', type: 'Local', priority: 6, speed: 60 },
       { id: 'L002', number: '12346', type: 'Local', priority: 6, speed: 65 },
-      { id: 'L003', number: '12347', type: 'Local', priority: 5, speed: 60 },
-      { id: 'L004', number: '12348', type: 'Local', priority: 5, speed: 55 }
+      { id: 'L003', number: '12347', type: 'Local', priority: 6, speed: 70 },
+      { id: 'L004', number: '12348', type: 'Local', priority: 6, speed: 55 },
+      { id: 'L005', number: '12349', type: 'Local', priority: 5, speed: 60 },
+      { id: 'L006', number: '12350', type: 'Local', priority: 5, speed: 55 }
     ];
 
     // Freight trains
@@ -79,7 +88,8 @@ class DataSimulator {
       schedules.push(schedule);
     }
 
-    // Save schedules to database
+    // Clear existing schedules and save new ones
+    await TrainSchedule.deleteMany({});
     await TrainSchedule.insertMany(schedules);
     this.trains = schedules;
     
@@ -228,7 +238,7 @@ class DataSimulator {
   /**
    * Stop the simulation
    */
-  stopSimulation() {
+  async stopSimulation() {
     if (!this.isRunning) {
       logger.warn('Simulation is not running');
       return;
@@ -244,11 +254,43 @@ class DataSimulator {
   }
 
   /**
+   * Set simulation time
+   */
+  setSimulationTime(timeString) {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    this.simulationTime = new Date('2024-01-01T06:00:00');
+    this.simulationTime.setHours(hours, minutes, 0, 0);
+    logger.info(`Simulation time set to: ${timeString}`);
+  }
+
+  /**
+   * Set simulation speed
+   */
+  setSimulationSpeed(speed) {
+    this.simulationSpeed = speed;
+    logger.info(`Simulation speed set to: ${speed}x`);
+  }
+
+  /**
+   * Get current simulation time
+   */
+  getSimulationTime() {
+    return this.simulationTime.toLocaleTimeString('en-GB', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  }
+
+
+  /**
    * Single simulation step
    */
   async simulationStep() {
     try {
-      const currentTime = moment();
+      // Advance simulation time
+      this.simulationTime = new Date(this.simulationTime.getTime() + (60000 * this.simulationSpeed)); // Add minutes based on speed
+      const currentTime = moment(this.simulationTime);
       
       // Update train positions
       await this.updateTrainPositions(currentTime);
