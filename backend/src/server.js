@@ -9,7 +9,7 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 
 // Import configurations
-import { database } from './config/database.js';
+import { connectDB } from './config/database.js';
 import { kafkaClient } from './config/kafka.js';
 import { logger } from './config/logger.js';
 
@@ -126,7 +126,7 @@ app.use('*', (req, res) => {
 async function initializeServices() {
   try {
     // Connect to database
-    await database.connect();
+    connectDB();
     logger.info('Database connected successfully');
     
     // Initialize Kafka
@@ -196,7 +196,7 @@ process.on('SIGTERM', async () => {
   await kafkaClient.disconnect();
   
   // Disconnect database
-  await database.disconnect();
+  await connectDB.disconnect();
   
   // Close server
   server.close(() => {
@@ -215,7 +215,7 @@ process.on('SIGINT', async () => {
   await kafkaClient.disconnect();
   
   // Disconnect database
-  await database.disconnect();
+  await connectDB.disconnect();
   
   // Close server
   server.close(() => {
